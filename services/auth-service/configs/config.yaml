@@ -1,0 +1,4 @@
+http_addr: ":8080"
+access_ttl: "15m"
+refresh_ttl: "720h"
+bcrypt_cost: 10
