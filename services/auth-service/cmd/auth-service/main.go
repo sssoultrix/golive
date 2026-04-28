@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/sssoultrix/golive/services/auth-service/internal/adapter/bcrypt"
+	adapterhttp "github.com/sssoultrix/golive/services/auth-service/internal/adapter/http"
 	"github.com/sssoultrix/golive/services/auth-service/internal/adapter/jwt_manager"
 	"github.com/sssoultrix/golive/services/auth-service/internal/adapter/postgres"
 	rediscache "github.com/sssoultrix/golive/services/auth-service/internal/adapter/redis"
@@ -48,6 +49,7 @@ func run() error {
 	defer func() { _ = rdb.Close() }()
 
 	userRepo := postgres.NewUserRepository(db)
+	outboxRepo := postgres.NewOutboxRepository(db)
 	refreshRepo := postgres.NewRefreshTokenRepository(db)
 	refreshCache := rediscache.NewRefreshTokenCache(rdb)
 
@@ -58,6 +60,7 @@ func run() error {
 
 	registerUC := usecase.NewRegisterUser(
 		userRepo,
+		outboxRepo,
 		refreshRepo,
 		refreshCache,
 		passwordHasher,
@@ -93,6 +96,16 @@ func run() error {
 		refreshHasher,
 	)
 
+	eventPublisher := adapterhttp.NewEventPublisher(cfg.ProfileServiceURL, slog.Default())
+	outboxProcessor := usecase.NewOutboxProcessor(
+		outboxRepo,
+		outboxRepo,
+		eventPublisher,
+		slog.Default(),
+		5*time.Second,
+		100,
+	)
+
 	router := httpt.NewRouter()
 	router.SetupRoutes(registerUC, loginUC, refreshUC, logoutUC, accessValidator)
 	r := router.GetEngine()
@@ -107,6 +120,8 @@ func run() error {
 	go func() {
 		errCh <- srv.ListenAndServe()
 	}()
+
+	go outboxProcessor.Start(ctx)
 
 	select {
 	case <-ctx.Done():

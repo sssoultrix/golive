@@ -18,6 +18,8 @@ type Config struct {
 
 	BcryptCost         int
 	RefreshTokenPepper string
+
+	ProfileServiceURL string
 }
 
 func Load() (Config, error) {
@@ -27,6 +29,7 @@ func Load() (Config, error) {
 	v.SetDefault("access_ttl", "15m")
 	v.SetDefault("refresh_ttl", "720h")
 	v.SetDefault("bcrypt_cost", 10)
+	v.SetDefault("profile_service_url", "http://localhost:8081")
 
 	v.SetConfigFile("services/auth-service/configs/config.yaml")
 	_ = v.ReadInConfig()
@@ -40,6 +43,7 @@ func Load() (Config, error) {
 	_ = v.BindEnv("refresh_ttl", "REFRESH_TTL")
 	_ = v.BindEnv("bcrypt_cost", "BCRYPT_COST")
 	_ = v.BindEnv("refresh_token_pepper", "REFRESH_TOKEN_PEPPER")
+	_ = v.BindEnv("profile_service_url", "PROFILE_SERVICE_URL")
 
 	accessTTL, err := time.ParseDuration(v.GetString("access_ttl"))
 	if err != nil {
@@ -61,6 +65,8 @@ func Load() (Config, error) {
 
 		BcryptCost:         v.GetInt("bcrypt_cost"),
 		RefreshTokenPepper: v.GetString("refresh_token_pepper"),
+
+		ProfileServiceURL: v.GetString("profile_service_url"),
 	}
 
 	if cfg.DatabaseURL == "" {

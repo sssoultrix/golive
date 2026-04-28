@@ -36,6 +36,7 @@ services:
       REDIS_ADDR: redis:6379
       JWT_SECRET: "change_me_change_me_change_me_change_me"
       REFRESH_TOKEN_PEPPER: "change_me"
+      PROFILE_SERVICE_URL: http://host.docker.internal:8081
     ports:
       - "8080:8080"
     depends_on:
@@ -43,6 +44,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   cleanup:
     build:

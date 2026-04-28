@@ -17,9 +17,43 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 }
 
 func (ur *UserRepository) CreateUser(ctx context.Context, user *domain.User) error {
+	tx, err := ur.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
 	query := `INSERT INTO users (id, login, password_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)`
 
-	if _, err := ur.db.Exec(ctx, query, user.ID, user.Login, user.PasswordHash, user.CreatedAt, user.UpdatedAt); err != nil {
+	if _, err := tx.Exec(ctx, query, user.ID, user.Login, user.PasswordHash, user.CreatedAt, user.UpdatedAt); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (ur *UserRepository) CreateUserWithOutbox(ctx context.Context, user *domain.User, event *domain.OutboxEvent) error {
+	tx, err := ur.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	userQuery := `INSERT INTO users (id, login, password_hash, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)`
+	if _, err := tx.Exec(ctx, userQuery, user.ID, user.Login, user.PasswordHash, user.CreatedAt, user.UpdatedAt); err != nil {
+		return err
+	}
+
+	outboxQuery := `INSERT INTO outbox (id, event_type, payload, processed, created_at) VALUES ($1, $2, $3, $4, $5)`
+	if _, err := tx.Exec(ctx, outboxQuery, event.ID, event.EventType, event.Payload, event.Processed, event.CreatedAt); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 

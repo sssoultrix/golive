@@ -10,6 +10,11 @@ import (
 
 type UserRepository interface {
 	CreateUser(ctx context.Context, user *domain.User) error
+	CreateUserWithOutbox(ctx context.Context, user *domain.User, event *domain.OutboxEvent) error
+}
+
+type OutboxRepository interface {
+	CreateEvent(ctx context.Context, event *domain.OutboxEvent) error
 }
 
 type PasswordHasher interface {
@@ -39,6 +44,7 @@ type TokenPair struct {
 
 type RegisterUser struct {
 	userRepo           UserRepository
+	outboxRepo         OutboxRepository
 	refreshTokenRepo   RefreshTokenRepository
 	refreshTokenCache  RefreshTokenCache
 	passwordHasher     PasswordHasher
@@ -49,6 +55,7 @@ type RegisterUser struct {
 
 func NewRegisterUser(
 	userRepo UserRepository,
+	outboxRepo OutboxRepository,
 	refreshTokenRepo RefreshTokenRepository,
 	refreshTokenCache RefreshTokenCache,
 	passwordHasher PasswordHasher,
@@ -58,6 +65,7 @@ func NewRegisterUser(
 ) *RegisterUser {
 	return &RegisterUser{
 		userRepo:           userRepo,
+		outboxRepo:         outboxRepo,
 		refreshTokenRepo:   refreshTokenRepo,
 		refreshTokenCache:  refreshTokenCache,
 		passwordHasher:     passwordHasher,
@@ -78,7 +86,12 @@ func (r *RegisterUser) Execute(ctx context.Context, login, password string) (uui
 		return uuid.Nil, TokenPair{}, err
 	}
 
-	if err := r.userRepo.CreateUser(ctx, user); err != nil {
+	event := domain.NewOutboxEvent("UserRegistered", map[string]interface{}{
+		"user_id": user.ID.String(),
+		"login":   user.Login,
+	})
+
+	if err := r.userRepo.CreateUserWithOutbox(ctx, user, event); err != nil {
 		return uuid.Nil, TokenPair{}, err
 	}
 
