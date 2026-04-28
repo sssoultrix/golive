@@ -1,0 +1,43 @@
+name: profile-service
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: profile
+      POSTGRES_PASSWORD: profile
+      POSTGRES_DB: profile
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U profile -d profile"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  profile-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://profile:profile@postgres:5432/profile?sslmode=disable
+      HTTP_ADDR: :8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrate:
+    image: migrate/migrate:v4.18.2
+    profiles: [tools]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations
+
+volumes:
+  postgres_data:

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -9,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/sssoultrix/golive/services/auth-service/internal/adapter/bcrypt"
@@ -18,7 +18,7 @@ import (
 	rediscache "github.com/sssoultrix/golive/services/auth-service/internal/adapter/redis"
 	"github.com/sssoultrix/golive/services/auth-service/internal/adapter/refresh_token"
 	"github.com/sssoultrix/golive/services/auth-service/internal/config"
-	"github.com/sssoultrix/golive/services/auth-service/internal/transport/http/handler"
+	httpt "github.com/sssoultrix/golive/services/auth-service/internal/transport/http"
 	"github.com/sssoultrix/golive/services/auth-service/internal/usecase"
 )
 
@@ -93,26 +93,9 @@ func run() error {
 		refreshHasher,
 	)
 
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.New()
-	r.Use(gin.Recovery())
-
-	r.GET("/healthz", func(c *gin.Context) { c.Status(http.StatusOK) })
-
-	registerHandler := handler.NewRegisterHandler(registerUC)
-	r.POST("/register", registerHandler.Register)
-
-	loginHandler := handler.NewLoginHandler(loginUC)
-	r.POST("/login", loginHandler.Login)
-
-	refreshHandler := handler.NewRefreshHandler(refreshUC)
-	r.POST("/refresh", refreshHandler.Refresh)
-
-	logoutHandler := handler.NewLogoutHandler(logoutUC)
-	r.POST("/logout", logoutHandler.Logout)
-
-	validateHandler := handler.NewValidateHandler(accessValidator)
-	r.POST("/validate", validateHandler.Validate)
+	router := httpt.NewRouter()
+	router.SetupRoutes(registerUC, loginUC, refreshUC, logoutUC, accessValidator)
+	r := router.GetEngine()
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -132,7 +115,7 @@ func run() error {
 		_ = srv.Shutdown(shutdownCtx)
 		return nil
 	case err := <-errCh:
-		if err == nil || err == http.ErrServerClosed {
+		if err == nil || errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}
 		return err
